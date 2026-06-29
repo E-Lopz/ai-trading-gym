@@ -33,6 +33,51 @@ Copy `.env.example` → `.env` and fill in Alpaca credentials from https://app.a
 `ALPACA_PAPER=true` uses paper trading; set to `false` for real money.
 No credentials needed for backtesting or the Streamlit app.
 
+## Recent additions
+
+### `rebalance_to_weights()` on `BasePortfolioStrategy`
+
+`strategies/portfolio_base.py` — call from any `on_portfolio_bar` to translate a target
+weight vector into buy/sell orders:
+
+```python
+self.rebalance_to_weights(
+    weights,          # dict[str, float] or np.ndarray parallel to self.symbols
+    bars,             # the `bars` dict from on_portfolio_bar
+    min_trade_value=10.0,  # skip trades smaller than this to avoid noise
+)
+```
+
+Clips negatives (long-only), renormalises to sum=1, sells before buys.
+Cross-symbol cash availability within one bar is not guaranteed — the engine
+processes symbols in insertion order, so a buy may fill before a sell for a
+different symbol clears. Keep a cash buffer or use `equity_fraction < 1`.
+
+### Gymnasium environment — `PortfolioEnv`
+
+`training/envs/portfolio_env.py` — standard `gymnasium.Env` for training DRL agents:
+
+```python
+from training.envs.portfolio_env import PortfolioEnv
+
+env = PortfolioEnv(
+    data,                  # dict[str, pd.DataFrame] — same format as engine
+    initial_cash=100_000,
+    lookback=20,           # bars in each observation
+    reward_shaping=fn,     # optional (log_return, info) -> float
+)
+obs, info = env.reset(seed=42)
+obs, reward, terminated, truncated, info = env.step(action)
+```
+
+- **Observation**: `Box(n_symbols, lookback, 5)` — OHLCV min-max normalised to `[0,1]`
+  within each lookback window; zero-padded at episode start.
+- **Action**: `Box(0, 1, n_symbols)` — softmaxed inside `step()` → portfolio weights
+  → `rebalance_to_weights()`.
+- **Reward**: `log(equity_t / equity_{t−1})` by default; override via `reward_shaping`.
+- **Info**: `{"equity": float, "weights": dict, "date": pd.Timestamp}` every step.
+- Inherits `BasePortfolioStrategy` so `rebalance_to_weights` is reused without duplication.
+
 ## Architecture
 
 ### The broker interface is the key abstraction
