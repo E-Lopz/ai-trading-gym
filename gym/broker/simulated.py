@@ -18,6 +18,7 @@ class Fill:
     order: Order
     fill_price: float
     commission: float
+    timestamp: object = None  # bar timestamp, set by process_bar
 
 
 class SimulatedBroker:
@@ -40,7 +41,7 @@ class SimulatedBroker:
         self._pending.append(order)
         return order
 
-    def process_bar(self, symbol: str, bar: pd.Series) -> list[Fill]:
+    def process_bar(self, symbol: str, bar: pd.Series, timestamp=None) -> list[Fill]:
         """Call once per bar to execute pending orders against OHLCV data."""
         executed: list[Fill] = []
         still_pending: list[Order] = []
@@ -64,7 +65,7 @@ class SimulatedBroker:
                 commission = abs(order.qty) * self.commission_per_share
                 try:
                     self.portfolio.apply_fill(order.symbol, order.qty, fill_price, commission)
-                    fill = Fill(order, fill_price, commission)
+                    fill = Fill(order, fill_price, commission, timestamp)
                     self.fills.append(fill)
                     executed.append(fill)
                 except ValueError:

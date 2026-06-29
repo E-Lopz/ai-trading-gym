@@ -28,7 +28,7 @@ class BacktestEngine:
             history = data.iloc[: i + 1]
 
             strategy.on_bar(bar, history)
-            broker.process_bar(symbol, bar)
+            broker.process_bar(symbol, bar, timestamp=timestamp)
 
             prices = {symbol: bar["close"]}
             equity_series[timestamp] = broker.portfolio.equity(prices)
